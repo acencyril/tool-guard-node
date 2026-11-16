@@ -167,3 +167,14 @@ test('rules are listed', () => {
     transfer: ['limit amount ≤ 1000, above: refused'],
   });
 });
+
+test('allowed values', async () => {
+  const { allowedValues, DENY } = await import('../src/index.js');
+  const guard = new Guard();
+  const send = guard.wrap('send', [allowedValues('to', ['*@mycompany.com'])], () => 'sent');
+  assert.equal(await send({ to: 'Anna@MyCompany.com' }), 'sent');
+  assert.match(await send({ to: 'x@gmail.com' }), /to "x@gmail.com" is not among the allowed values/);
+  assert.match(await send({ to: ['a@mycompany.com', 'x@gmail.com'] }), /NOT done yet/);
+  const strict = guard.wrap('strict', [allowedValues('to', ['*@mycompany.com'], { otherwise: DENY })], () => 'sent');
+  assert.match(await strict({}), /Refused by policy/);
+});

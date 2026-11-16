@@ -1,12 +1,15 @@
 {
   "name": "@acencyril/tool-guard",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Permissions, limits, rate limits, human approval and a stop button for the tools an AI agent may call. A prompt asks; Tool Guard decides.",
   "type": "module",
   "exports": {
     ".": {
       "types": "./src/index.d.ts",
       "default": "./src/index.js"
+    },
+    "./gateway": {
+      "default": "./src/gateway.js"
     }
   },
   "types": "./src/index.d.ts",

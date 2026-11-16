@@ -3,5 +3,5 @@
 
 export { Decision, ToolCallBlocked } from './decision.js';
 export { AI, CODE, ENFORCE, Guard, OBSERVE } from './guard.js';
-export { APPROVAL, DENY, PER_TOOL, PER_USER, granted, limit, rateLimit, requiresApproval } from './rules.js';
+export { APPROVAL, DENY, PER_TOOL, PER_USER, allowedValues, granted, limit, rateLimit, requiresApproval } from './rules.js';
 export { FileApprovals, FileCounter, FileJournal, FileStops, MemoryApprovals, MemoryCounter, MemoryJournal, MemoryStops } from './stores.js';

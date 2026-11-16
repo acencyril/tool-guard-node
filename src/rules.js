@@ -19,6 +19,19 @@ export function limit(argument, { max, above = DENY, min = null } = {}) {
   return { kind: 'limit', argument, max, above, min };
 }
 
+// A text argument (or every item of a list) must match one of the patterns, shell-style, case-insensitive:
+// allowedValues('to', ['*@mycompany.com']). Otherwise: held for a human (APPROVAL, default) or refused (DENY).
+export function allowedValues(argument, patterns, { otherwise = APPROVAL } = {}) {
+  if (!Array.isArray(patterns) || !patterns.length) throw new TypeError('allowedValues() needs at least one pattern');
+  if (otherwise !== DENY && otherwise !== APPROVAL) throw new TypeError('allowedValues(): otherwise must be "deny" or "approval"');
+  return { kind: 'values', argument, patterns: [...patterns], otherwise };
+}
+
+export function globMatch(value, pattern) {
+  const re = new RegExp(`^${pattern.toLowerCase().replace(/[.+^${}()|\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.')}$`, 's');
+  return re.test(value.trim().toLowerCase());
+}
+
 export function rateLimit(limit, { perSeconds, per = PER_USER } = {}) {
   if (!(limit >= 1) || !(perSeconds >= 1) || (per !== PER_USER && per !== PER_TOOL)) {
     throw new TypeError('rateLimit() needs limit ≥ 1, perSeconds ≥ 1, per "user" or "tool"');
@@ -38,6 +51,7 @@ export function describe(rules) {
     if (r.kind === 'granted') out.push(`granted ${r.permission}${r.subject ? ` on ${r.subject}` : ''}`);
     if (r.kind === 'rate') out.push(`rateLimit ${r.limit} per ${r.seconds}s, per ${r.per}`);
     if (r.kind === 'limit') out.push(`limit ${r.min !== null ? `${num(r.min)} ≤ ` : ''}${r.argument} ≤ ${num(r.max)}, above: ${r.above === DENY ? 'refused' : 'held for a human'}`);
+    if (r.kind === 'values') out.push(`allowedValues ${r.argument} in ${r.patterns.join(', ')}, otherwise: ${r.otherwise === DENY ? 'refused' : 'held for a human'}`);
     if (r.kind === 'approval') out.push(`requiresApproval${r.reason ? ` ${r.reason}` : ''}`);
   }
   return out;

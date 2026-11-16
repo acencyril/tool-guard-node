@@ -25,11 +25,13 @@ export declare const CODE: 'code';
 export type Rule =
   | { kind: 'granted'; permission: string; subject: string | null; message: string | null }
   | { kind: 'limit'; argument: string; max: number; above: 'deny' | 'approval'; min: number | null }
+  | { kind: 'values'; argument: string; patterns: string[]; otherwise: 'deny' | 'approval' }
   | { kind: 'rate'; limit: number; seconds: number; per: 'user' | 'tool' }
   | { kind: 'approval'; reason: string | null };
 
 export declare function granted(permission: string, options?: { subject?: string; message?: string }): Rule;
 export declare function limit(argument: string, options: { max: number; above?: 'deny' | 'approval'; min?: number }): Rule;
+export declare function allowedValues(argument: string, patterns: string[], options?: { otherwise?: 'deny' | 'approval' }): Rule;
 export declare function rateLimit(limit: number, options: { perSeconds: number; per?: 'user' | 'tool' }): Rule;
 export declare function requiresApproval(reason?: string): Rule;
 

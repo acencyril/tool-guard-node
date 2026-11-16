@@ -8,7 +8,7 @@
 // returns, for the model, a plain message telling it not to retry and to tell the user.
 
 import { Decision, ToolCallBlocked } from './decision.js';
-import { APPROVAL, DENY as ABOVE_DENY, PER_TOOL, describe } from './rules.js';
+import { APPROVAL, DENY as ABOVE_DENY, PER_TOOL, describe, globMatch } from './rules.js';
 import {
   APPROVED, FAILED, PENDING, REJECTED, SCOPES, MemoryApprovals, MemoryCounter, MemoryJournal,
   describeStop, expired, newApproval, nowIso, stopMatches,
@@ -29,6 +29,7 @@ export class Guard {
   } = {}) {
     if (mode !== ENFORCE && mode !== OBSERVE) throw new TypeError('mode must be "enforce" or "observe"');
     if (!(maxPendingPerUser >= 1)) throw new TypeError('maxPendingPerUser must be at least 1');
+    this.deferred = false;
     Object.assign(this, { approvals, journal, stops, counter, isGranted, currentUser, mode, maxPendingPerUser, expireAfter, agents: agents ?? {}, allowUnknownAgent, fourEyes });
   }
 
@@ -59,9 +60,9 @@ export class Guard {
     return t.fn(args);
   }
 
-  async decide(tool, args, { user = null, agent = null, channel = AI } = {}) {
+  async decide(tool, args, { user = null, agent = null, channel = AI, rules = null } = {}) {
     if (user == null && this.currentUser) user = (await this.currentUser()) ?? null;
-    const rules = this.#tools.get(tool)?.rules ?? [];
+    rules ??= this.#tools.get(tool)?.rules ?? [];
     const stopped = this.#stopped(tool, agent, channel === AI);
     let decision = stopped ?? (await this.#evaluate(tool, rules, args, user, agent, channel));
     let would = null;
@@ -118,6 +119,16 @@ export class Guard {
         hold ??= why;
       }
     }
+    for (const av of rules.filter((r) => r.kind === 'values')) {
+      const v = args[av.argument];
+      const items = Array.isArray(v) ? v : [v];
+      const bad = items.filter((x) => typeof x !== 'string' || !av.patterns.some((p) => globMatch(x, p)));
+      if (v == null || items.length === 0 || bad.length) {
+        const why = `${av.argument} "${bad.length ? bad[0] : v}" is not among the allowed values`;
+        if (av.otherwise === ABOVE_DENY) return Decision.deny(why);
+        hold ??= why;
+      }
+    }
     const approval = rules.find((r) => r.kind === 'approval');
     if (hold === null && approval) hold = approval.reason ?? `every "${tool}" is approved by a human`;
     return hold !== null ? Decision.pending(hold) : Decision.allow();
@@ -135,7 +146,13 @@ export class Guard {
   async approve(id, by) {
     const a = this.#waiting(id, by);
     const t = this.#tools.get(a.tool);
-    if (!t) throw new Error(`tool "${a.tool}" is not registered with this guard`);
+    if (!t && !this.deferred) throw new Error(`tool "${a.tool}" is not registered with this guard`);
+    if (this.deferred) { // the gateway: the approved call runs in the gateway process, which picks it up
+      Object.assign(a, { status: APPROVED, queued: true, result: "approved, runs at the gateway's next check", decidedBy: by, decidedAt: nowIso() });
+      this.approvals.save(a);
+      this.journal.record({ event: 'approval', tool: a.tool, approval: a.id, status: a.status, by });
+      return a;
+    }
     try {
       const result = await t.fn(a.arguments);
       Object.assign(a, { status: APPROVED, result: result == null ? null : String(typeof result === 'object' ? JSON.stringify(result) : result).slice(0, 2000) });

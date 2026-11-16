@@ -15,6 +15,10 @@ in front of the tool, and checks it **before** the tool runs, whatever the model
 - **Journal**: one line per decision (who, which tool, which arguments, what was decided and why).
 - **Observe mode**: run as usual and write down what would have been blocked, to try it on a live agent first.
 
+- **A gateway in front of MCP servers you did not write** (mail, drive, CRM, bank): the same rules from a config
+  file, and every tool fingerprinted, so a tool that changes or whose description gives the model orders cannot
+  be called until a person trusts it again.
+
 No dependency. Node 18+. Types included. Works with the Vercel AI SDK, the OpenAI Agents SDK, MCP servers, or plain
 function calling.
 
@@ -48,11 +52,12 @@ through, so it drops in as a tool's `execute` or handler.
 ## The rules
 
 ```js
-import { APPROVAL, PER_TOOL, granted, limit, rateLimit, requiresApproval } from '@acencyril/tool-guard';
+import { APPROVAL, PER_TOOL, allowedValues, granted, limit, rateLimit, requiresApproval } from '@acencyril/tool-guard';
 
 granted('finance')                                  // the current user must hold "finance"
 granted('edit', { subject: 'account' })             // ... "edit" on the value of the `account` argument
 limit('amount', { max: 1000 })                      // above 1000: refused
+allowedValues('to', ['*@mycompany.com'])            // any other recipient: held for a human ({ otherwise: DENY }: refused)
 limit('amount', { max: 50, above: APPROVAL, min: 0 }) // above 50: held for a human; below 0: refused
 rateLimit(5, { perSeconds: 60 })                    // 5 calls a minute per user (per: PER_TOOL for everyone)
 requiresApproval('every wire is reviewed')          // every call waits for a human
@@ -126,6 +131,49 @@ const refundTool = tool({ name: 'refund', description: 'Refund an order', parame
 server.tool('refund', 'Refund an order', { order: z.string(), amount: z.number() },
   async (args) => ({ content: [{ type: 'text', text: await refund(args) }] }));
 ```
+
+## In front of an MCP server you did not write
+
+Your agent uses a mail or drive connector somebody else wrote: you cannot put a rule in its code. Put the
+gateway in front of it. The agent starts `npx tool-guard gateway` instead of the server; the gateway starts the real
+server and relays everything, except the calls it refuses or holds.
+
+```json
+{
+  "upstream": {"command": "npx", "args": ["-y", "some-mail-mcp-server@1.4.2"], "env": {"MAIL_TOKEN": "..."}},
+  "state_dir": "var/tool-guard/mail",
+  "default": "allow",
+  "trust_on_first_use": true,
+  "tools": {
+    "send_email": {"allowed_values": {"to": ["*@mycompany.com"]}},
+    "delete_*": {"deny": "deleting mail is not allowed"},
+    "create_payment": {"limit": {"amount": {"max": 50, "above": "approval", "min": 0}}},
+    "search": {"rate": {"limit": 30, "per_seconds": 60}}
+  }
+}
+```
+
+In the agent's MCP settings (Claude, Cursor, your own client), replace the server's command with:
+
+```json
+{"command": "npx", "args": ["tool-guard", "gateway", "--config", "/path/to/mail.json"]}
+```
+
+- A mail to `thief@gmail.com` waits for a human; `delete_email` is refused; nothing blocked reaches the server.
+- Every tool is fingerprinted (name, description, input schema). A tool that appears or changes after it was
+  trusted cannot be called; neither can a tool whose description gives the model orders ("ignore previous
+  instructions", "do not tell the user", "send … to http…", "read ~/.ssh…"), even on first use.
+- `default: "approval"` or `"deny"` makes every tool without a rule wait or refused.
+
+```bash
+npx tool-guard gateway --config mail.json tools              # every tool, trusted or blocked and why
+npx tool-guard gateway --config mail.json trust send_email --by cyril
+npx tool-guard gateway --config mail.json approvals          # approve / reject / stop / resume / journal, as above
+```
+
+An approved call runs in the gateway at its next check (every 2 seconds), and its result is stored with the request.
+
+The config file is the same as the Python gateway's.
 
 ## What it is not
 

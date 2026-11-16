@@ -11,6 +11,8 @@ import { pathToFileURL } from 'node:url';
 import { Guard } from '../src/index.js';
 
 const argv = process.argv.slice(2);
+const gatewayMode = argv[0] === 'gateway';
+if (gatewayMode) argv.shift();
 const opt = (name) => {
   const i = argv.indexOf(name);
   if (i < 0) return null;
@@ -19,20 +21,38 @@ const opt = (name) => {
   return v;
 };
 const spec = opt('--guard');
+const configFile = opt('--config');
+const all = argv.includes('--all') ? (argv.splice(argv.indexOf('--all'), 1), true) : false;
 const by = opt('--by');
 const reason = opt('--reason');
 const n = Number(opt('-n') ?? 20);
 const [cmd, a1, a2] = argv;
-const usage = 'usage: tool-guard --guard ./agent.js approvals|approve ID --by NAME|reject ID --by NAME|stop [scope] [target]|resume [scope] [target]|rules|journal [-n N]';
-if (!spec || !cmd) {
-  console.error(usage);
-  process.exit(2);
-}
-const mod = await import(pathToFileURL(path.resolve(spec)).href);
-const guard = mod.guard ?? mod.default;
-if (!(guard instanceof Guard)) {
-  console.error(`${spec} exports no Guard (export const guard = new Guard(...))`);
-  process.exit(2);
+const usage = 'usage: tool-guard --guard ./agent.js approvals|approve ID --by NAME|reject ID --by NAME|stop [scope] [target]|resume [scope] [target]|rules|journal [-n N]\n'
+  + '       tool-guard gateway --config gateway.json [run|tools|trust NAME... [--all]|approvals|approve|reject|stop|resume|journal]';
+let guard;
+let pins = null;
+if (gatewayMode) {
+  if (!configFile) {
+    console.error(usage);
+    process.exit(2);
+  }
+  const { Gateway, buildGuard, loadConfig } = await import('../src/gateway.js');
+  const { config, base } = loadConfig(configFile);
+  if (!cmd || cmd === 'run') {
+    process.exit(await new Gateway(config, base).run());
+  }
+  ({ guard, pins } = buildGuard(config, base));
+} else {
+  if (!spec || !cmd) {
+    console.error(usage);
+    process.exit(2);
+  }
+  const mod = await import(pathToFileURL(path.resolve(spec)).href);
+  guard = mod.guard ?? mod.default;
+  if (!(guard instanceof Guard)) {
+    console.error(`${spec} exports no Guard (export const guard = new Guard(...))`);
+    process.exit(2);
+  }
 }
 
 try {
@@ -58,6 +78,22 @@ try {
     case 'resume':
       console.log(guard.resume(a1 ?? 'all', a2 ?? null, { by }) ? 'Resumed.' : 'Nothing was stopped there.');
       break;
+    case 'tools': {
+      if (!pins) throw new Error('tools is a gateway command');
+      const data = pins.load();
+      for (const name of Object.keys(data.seen ?? {}).sort()) console.log(`${name}: ${data.blocked?.[name] ? `BLOCKED: ${data.blocked[name]}` : 'trusted'}`);
+      if (!Object.keys(data.seen ?? {}).length) console.log('No tool listed yet: start the agent once through the gateway.');
+      break;
+    }
+    case 'trust': {
+      if (!pins) throw new Error('trust is a gateway command');
+      const names = argv.slice(1);
+      if (!names.length && !all) throw new Error('Name the tools to trust, or --all.');
+      const done = pins.trust(all ? null : names, by ?? 'cli');
+      console.log(`Trusted: ${done.length ? done.join(', ') : 'nothing (unknown names?)'}`);
+      if (!done.length) process.exitCode = 1;
+      break;
+    }
     case 'rules':
       for (const [tool, lines] of Object.entries(guard.rules())) {
         console.log(tool + (lines.length ? ':' : ': no rule'));
