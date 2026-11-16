@@ -1,0 +1,46 @@
+{
+  "name": "@acencyril/tool-guard",
+  "version": "0.1.0",
+  "description": "Permissions, limits, rate limits, human approval and a stop button for the tools an AI agent may call. A prompt asks; Tool Guard decides.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "types": "./src/index.d.ts",
+  "bin": {
+    "tool-guard": "bin/tool-guard.js"
+  },
+  "files": [
+    "src",
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "llm",
+    "tool-calling",
+    "mcp",
+    "guardrails",
+    "security",
+    "human-in-the-loop"
+  ],
+  "author": "Cyril Delage",
+  "license": "MIT",
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@openai/agents": "^0.22.0",
+    "ai": "^7.0.173",
+    "zod": "^4.6.7"
+  }
+}
