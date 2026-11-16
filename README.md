@@ -95,6 +95,8 @@ and the "stop all agents" switch do not apply to them, every other rule does. It
 
 ## The human side
 
+Once installed in your project, `npx tool-guard` runs this package's command (elsewhere: `npx -y @acencyril/tool-guard`).
+
 ```bash
 npx tool-guard --guard ./agent.js approvals             # what waits
 npx tool-guard --guard ./agent.js approve f720c2b2 --by sophie
@@ -156,7 +158,7 @@ server and relays everything, except the calls it refuses or holds.
 In the agent's MCP settings (Claude, Cursor, your own client), replace the server's command with:
 
 ```json
-{"command": "npx", "args": ["tool-guard", "gateway", "--config", "/path/to/mail.json"]}
+{"command": "npx", "args": ["-y", "@acencyril/tool-guard", "gateway", "--config", "/path/to/mail.json"]}
 ```
 
 - A mail to `thief@gmail.com` waits for a human; `delete_email` is refused; nothing blocked reaches the server.
