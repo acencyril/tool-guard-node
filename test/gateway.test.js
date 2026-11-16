@@ -95,3 +95,8 @@ test('a poisoned tool is not trusted even on first use; stop button', async () =
   assert.match(text(await s.call('pay', { amount: 1 })), /tool "pay" is stopped \(incident\)/);
   await s.close();
 });
+
+test('the fingerprint is the same in PHP, Python and Node', async () => {
+  const { fingerprint } = await import('../src/gateway.js');
+  assert.equal(fingerprint(JSON.parse('{"name":"send_email","description":"Envoie un e-mail à l/équipe","inputSchema":{"type":"object","properties":{"to":{"type":"string"}}}}')), '8d2ea801481f52d5');
+});
